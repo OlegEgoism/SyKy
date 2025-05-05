@@ -15,6 +15,7 @@ ICON_PATH = os.path.join(os.path.dirname(__file__), "logo.png")
 
 notes_info = "Заметки"
 settings_info = "Настройки"
+notes_save = "Сохранить в файл"
 exit_app = "Выход"
 
 
@@ -37,8 +38,7 @@ class NotesWindow(Gtk.Window):
         scroll.add(self.textview)
         vbox.pack_start(scroll, True, True, 0)
 
-        # Кнопка "Сохранить в note.txt"
-        save_button = Gtk.Button(label="Сохранить в note.txt")
+        save_button = Gtk.Button(label=notes_save)
         save_button.connect("clicked", self.save_to_txt)
         vbox.pack_start(save_button, False, False, 0)
 
@@ -123,7 +123,6 @@ class NotesWindow(Gtk.Window):
             """
             try:
                 css_provider.load_from_data(css.encode())
-                context = self.textview.get_style_context()
                 Gtk.StyleContext.add_provider_for_screen(
                     Gdk.Screen.get_default(),
                     css_provider,
@@ -152,7 +151,6 @@ class NotesTrayApp:
         self.settings_item.connect("activate", self.open_settings)
         self.menu.append(self.settings_item)
 
-        # Разделитель перед кнопкой "Выход"
         self.menu.append(Gtk.SeparatorMenuItem())
 
         self.quit_item = Gtk.MenuItem(label=exit_app)
@@ -169,7 +167,7 @@ class NotesTrayApp:
         self.window.present()
 
     def open_settings(self, _):
-        dialog = Gtk.ColorChooserDialog(title="Выберите цвет текста", parent=self.window)
+        dialog = Gtk.ColorChooserDialog(title="Цвет текста", parent=self.window)
 
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
