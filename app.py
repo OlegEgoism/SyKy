@@ -16,6 +16,8 @@ ICON_PATH = os.path.join(os.path.dirname(__file__), "logo.png")
 notes_info = "Заметки"
 settings_info = "Настройки"
 notes_save = "Сохранить в файл"
+clear_notes = "Очистить"
+restore_notes = "Восстановить"
 exit_app = "Выход"
 
 
@@ -38,9 +40,21 @@ class NotesWindow(Gtk.Window):
         scroll.add(self.textview)
         vbox.pack_start(scroll, True, True, 0)
 
+        # Горизонтальный контейнер для кнопок
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        vbox.pack_start(hbox, False, False, 0)
+
         save_button = Gtk.Button(label=notes_save)
         save_button.connect("clicked", self.save_to_txt)
-        vbox.pack_start(save_button, False, False, 0)
+        hbox.pack_start(save_button, False, False, 0)
+
+        clear_button = Gtk.Button(label=clear_notes)
+        clear_button.connect("clicked", self.clear_notes)
+        hbox.pack_start(clear_button, False, False, 0)
+
+        restore_button = Gtk.Button(label=restore_notes)
+        restore_button.connect("clicked", self.restore_notes)
+        hbox.pack_start(restore_button, False, False, 0)
 
         self.connect("delete-event", self.on_close)
 
@@ -96,6 +110,16 @@ class NotesWindow(Gtk.Window):
                 print("Ошибка при сохранении файла:", e)
 
         dialog.destroy()
+
+    def clear_notes(self, _button):
+        # Очистить текстовое поле
+        self.textbuffer.set_text("")
+        print("Заметки очищены.")
+
+    def restore_notes(self, _button):
+        # Восстановить заметки из файла
+        self.load_notes()
+        print("Заметки восстановлены.")
 
     def on_close(self, *args):
         self.save_notes()
