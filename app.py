@@ -17,12 +17,14 @@ CONFIG_DIR = os.path.expanduser("~/.config/code_generator")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "secret.json")
 APPEND = "OLEG"  # <<<<<<<---------------- добавленное секретное слово
 
+
 class TrayApp:
     def __init__(self):
         self.last_secret = ""
         self.last_code = "—"
         self.time_left = INTERVAL
         self.notifications_enabled = True
+        self.code_visible = True  # Переменная для отслеживания видимости кода
 
         Notify.init("Генератор кода")
         os.makedirs(CONFIG_DIR, exist_ok=True)
@@ -50,6 +52,11 @@ class TrayApp:
         self.notify_toggle.set_active(self.notifications_enabled)
         self.notify_toggle.connect("toggled", self.on_toggle_notifications)
         menu.append(self.notify_toggle)
+
+        toggle_code_item = Gtk.CheckMenuItem(label="Показать в трее")
+        toggle_code_item.set_active(self.code_visible)
+        toggle_code_item.connect("toggled", self.on_toggle_code_visibility)
+        menu.append(toggle_code_item)
         menu.append(Gtk.SeparatorMenuItem())
 
         quit_item = Gtk.MenuItem(label="Выход")
@@ -99,6 +106,11 @@ class TrayApp:
                 self.update_code(force=True)
         dialog.destroy()
 
+    def on_toggle_code_visibility(self, widget):
+        self.code_visible = widget.get_active()
+        self.update_code(force=True)  # Перезапускаем обновление, чтобы показать/скрыть код
+        self.save_secret()
+
     def tick(self):
         if not self.last_secret:
             return True
@@ -113,6 +125,12 @@ class TrayApp:
         changed = (code != self.last_code)
         self.last_code = code
         self.code_item.set_label(self._code_label())
+
+        if self.code_visible:
+            self.ind.set_label(f" {self.last_code}    ⏳{self.time_left}", "")  # Отображаем код в трее
+        else:
+            self.ind.set_label(" ", "")  # Скрываем код в трее
+
         if (changed and not force or force) and self.notifications_enabled:
             self.show_notification(code)
 
@@ -136,8 +154,6 @@ def main():
     TrayApp()
     Gtk.main()
 
+
 if __name__ == "__main__":
     main()
-
-
-
