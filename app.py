@@ -53,7 +53,7 @@ class TrayApp:
         self.notify_toggle.connect("toggled", self.on_toggle_notifications)
         menu.append(self.notify_toggle)
 
-        toggle_code_item = Gtk.CheckMenuItem(label="Показать в трее")
+        toggle_code_item = Gtk.CheckMenuItem(label="Отображение")
         toggle_code_item.set_active(self.code_visible)
         toggle_code_item.connect("toggled", self.on_toggle_code_visibility)
         menu.append(toggle_code_item)
