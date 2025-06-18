@@ -67,7 +67,7 @@ class TrayApp:
         GLib.timeout_add_seconds(1, self.tick)
 
     def _code_label(self):
-        return f"Код: {self.last_code}    ⏳{self.time_left}s"
+        return f"Код: {self.last_code}  ⏳{self.time_left}s"
 
     def load_secret(self):
         try:
@@ -108,7 +108,7 @@ class TrayApp:
 
     def on_toggle_code_visibility(self, widget):
         self.code_visible = widget.get_active()
-        self.update_code(force=True)  # Перезапускаем обновление, чтобы показать/скрыть код
+        self.update_code(force=True)
         self.save_secret()
 
     def tick(self):
@@ -127,9 +127,9 @@ class TrayApp:
         self.code_item.set_label(self._code_label())
 
         if self.code_visible:
-            self.ind.set_label(f" {self.last_code}    ⏳{self.time_left}", "")  # Отображаем код в трее
+            self.ind.set_label(f" {self.last_code}", "")
         else:
-            self.ind.set_label(" ", "")  # Скрываем код в трее
+            self.ind.set_label(" ", "")
 
         if (changed and not force or force) and self.notifications_enabled:
             self.show_notification(code)
