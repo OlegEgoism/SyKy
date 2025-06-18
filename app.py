@@ -131,9 +131,9 @@ class TrayApp:
         self.code_item.set_label(self._code_label())
 
         if self.code_visible:
-            self.ind.set_label(f"{self.last_code}", "")
+            self.ind.set_label(f" {self.last_code}", "")
         else:
-            self.ind.set_label(" ", "")
+            self.ind.set_label("", "")
 
         self.update_icon()
 
