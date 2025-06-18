@@ -2,9 +2,11 @@ import os
 import json
 import hmac
 import hashlib
+import cairo
+import gi
+import tempfile
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("AppIndicator3", "0.1")
@@ -15,7 +17,7 @@ INTERVAL = 30
 TZ = ZoneInfo("Europe/Minsk")
 CONFIG_DIR = os.path.expanduser("~/.config/code_generator")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "secret.json")
-APPEND = "OLEG"  # <<<<<<<---------------- добавленное секретное слово
+APPEND = "OLEG"
 
 
 class TrayApp:
@@ -24,15 +26,17 @@ class TrayApp:
         self.last_code = "—"
         self.time_left = INTERVAL
         self.notifications_enabled = True
-        self.code_visible = True  # Переменная для отслеживания видимости кода
+        self.code_visible = True
+        self.default_icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "logo.png"))
+        self.current_icon_path = self.default_icon_path
 
         Notify.init("Генератор кода")
         os.makedirs(CONFIG_DIR, exist_ok=True)
         self.load_secret()
 
-        icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "logo.png"))
         self.ind = AppIndicator3.Indicator.new(
-            "code-generator", icon_path,
+            "code-generator",
+            self.default_icon_path,
             AppIndicator3.IndicatorCategory.APPLICATION_STATUS
         )
         self.ind.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
@@ -127,9 +131,11 @@ class TrayApp:
         self.code_item.set_label(self._code_label())
 
         if self.code_visible:
-            self.ind.set_label(f" {self.last_code}", "")
+            self.ind.set_label(f"{self.last_code}", "")
         else:
             self.ind.set_label(" ", "")
+
+        self.update_icon()
 
         if (changed and not force or force) and self.notifications_enabled:
             self.show_notification(code)
@@ -145,9 +151,46 @@ class TrayApp:
         if not self.notifications_enabled:
             return
         title = "Код обновлён: " + code
-        icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "logo.png"))
-        notification = Notify.Notification.new(title, icon=icon_path)
+        notification = Notify.Notification.new(title, icon=self.default_icon_path)
         notification.show()
+
+    def update_icon(self):
+        temp_dir = os.path.expanduser("~/.cache/code_generator")
+        os.makedirs(temp_dir, exist_ok=True)
+        with tempfile.NamedTemporaryFile(prefix='code_gen_', suffix='.png', dir=temp_dir, delete=False) as tmp_file:
+            icon_path = tmp_file.name
+
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 64, 64)
+        context = cairo.Context(surface)
+        context.set_source_rgba(0, 0, 0, 0)
+        context.paint()
+        context.arc(32, 32, 28, 0, 2 * 3.14159)
+        context.set_source_rgba(0.7, 0.7, 0.7, 0.3)
+        context.fill()
+        progress = 1 - (self.time_left / INTERVAL)
+        context.arc(32, 32, 28, -0.5 * 3.14159, (progress * 2 * 3.14159) - 0.5 * 3.14159)
+        context.line_to(32, 32)
+        context.set_source_rgba(0.0, 0.6, 0.0, 0.7)
+        context.fill()
+        context.arc(32, 32, 28, 0, 2 * 3.14159)
+        context.set_line_width(2)
+        context.set_source_rgba(0.4, 0.4, 0.4, 0.7)
+        context.stroke()
+        try:
+            app_icon_surface = cairo.ImageSurface.create_from_png(self.default_icon_path)
+            context.set_source_surface(app_icon_surface, 16, 16)
+            context.paint()
+        except:
+            pass
+
+        surface.write_to_png(icon_path)
+        self.ind.set_icon_full(icon_path, "Code Generator")
+        if hasattr(self, 'current_icon_path') and self.current_icon_path != self.default_icon_path:
+            try:
+                os.unlink(self.current_icon_path)
+            except:
+                pass
+        self.current_icon_path = icon_path
 
 
 def main():
