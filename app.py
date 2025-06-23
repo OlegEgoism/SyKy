@@ -71,7 +71,7 @@ class TrayApp:
         GLib.timeout_add_seconds(1, self.tick)
 
     def _code_label(self):
-        return f"Код: {self.last_code}  ⏳{self.time_left}s"
+        return f"Код: {self.last_code}  ⏳{self.time_left} сек."
 
     def load_secret(self):
         try:
