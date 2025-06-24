@@ -15,11 +15,11 @@ gi.require_version("AppIndicator3", "0.1")
 gi.require_version("Notify", "0.7")
 from gi.repository import Gtk, GLib, AppIndicator3, Notify
 
-INTERVAL = 30
 TZ = ZoneInfo("Europe/Minsk")
 CONFIG_DIR = os.path.expanduser("~/.config/code_generator")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "secret.json")
 APPEND = "OLEG"
+INTERVAL = 30
 SIZE_KODE = 6
 
 class TrayApp:
