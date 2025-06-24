@@ -189,7 +189,7 @@ class TrayApp:
         if (changed and not force or force) and self.notifications_enabled:
             self.show_notification(code)
 
-    def generate_code(self, secret, digits=6):
+    def generate_code(self, secret, digits=SIZE_KODE):
         now = datetime.now(TZ)
         slot = int(now.astimezone(timezone.utc).timestamp()) // INTERVAL
         msg = f"{secret}:{APPEND}:{slot}".encode()
