@@ -99,10 +99,10 @@ class TrayApp:
         lang_item = Gtk.MenuItem(label=self.tr("language"))
         lang_item.set_submenu(lang_menu)
 
-        en_item = Gtk.RadioMenuItem(label="English")
-        ru_item = Gtk.RadioMenuItem(label="Русский", group=en_item)
-        de_item = Gtk.RadioMenuItem(label="Deutsch", group=en_item)
-        zh_item = Gtk.RadioMenuItem(label="中文", group=en_item)
+        en_item = Gtk.RadioMenuItem.new_with_label(None, "English")
+        ru_item = Gtk.RadioMenuItem.new_with_label_from_widget(en_item, "Русский")
+        de_item = Gtk.RadioMenuItem.new_with_label_from_widget(en_item, "Deutsch")
+        zh_item = Gtk.RadioMenuItem.new_with_label_from_widget(en_item, "中文")
 
         lang_items = {
             "en": en_item,
@@ -140,7 +140,7 @@ class TrayApp:
         self.save_config()
 
     def on_language_change(self, widget, language_code):
-        if self.language != language_code:
+        if widget.get_active() and self.language != language_code:
             self.language = language_code
             self.save_config()
             self.create_menu()
@@ -154,7 +154,9 @@ class TrayApp:
         dialog.add_button(Gtk.STOCK_OK, Gtk.ResponseType.OK)
         entry = Gtk.Entry()
         entry.set_text(self.last_secret)
-        dialog.get_content_area().add(entry)
+        # dialog.get_content_area().add(entry)
+        dialog.get_content_area().pack_start(entry, True, True, 0)
+
         dialog.show_all()
 
         if dialog.run() == Gtk.ResponseType.OK:
@@ -187,7 +189,7 @@ class TrayApp:
 
         self.update_icon()
 
-        if (changed and not force or force) and self.notifications_enabled:
+        if (changed or force) and self.notifications_enabled:
             self.show_notification(code)
 
     def generate_code(self, secret, digits=SIZE_KODE):
