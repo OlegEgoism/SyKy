@@ -18,9 +18,10 @@ from gi.repository import Gtk, GLib, AppIndicator3, Notify
 TZ = ZoneInfo("Europe/Minsk")
 CONFIG_DIR = os.path.expanduser("~/.config/code_generator")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "secret.json")
-APPEND = "OLEG"
-INTERVAL = 30
-SIZE_KODE = 6
+APPEND = "OLEG"  # <-- Секретный ключ для (можете установить свой)
+INTERVAL = 30  # <-- Время обновления сгенерированного ключа
+SIZE_KODE = 6  # <-- Длина сгенерированного ключа
+
 
 class TrayApp:
     def __init__(self):
