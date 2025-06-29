@@ -5,6 +5,7 @@ import hashlib
 import cairo
 import gi
 import tempfile
+import xdg.BaseDirectory
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -23,6 +24,17 @@ INTERVAL = 30  # <-- Время обновления сгенерированн�
 SIZE_KODE = 6  # <-- Длина сгенерированного ключа
 
 
+def get_temp_dir():
+    """Возвращает правильный временный каталог в зависимости от окружения"""
+    if 'SNAP' in os.environ:
+        snap_tmp = os.path.join(os.environ['SNAP_USER_DATA'], 'tmp')
+        os.makedirs(snap_tmp, exist_ok=True)
+        return snap_tmp
+    cache_dir = os.path.join(xdg.BaseDirectory.xdg_cache_home, 'code_generator')
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
 class TrayApp:
     def __init__(self):
         self.last_secret = ""
@@ -33,8 +45,9 @@ class TrayApp:
         self.default_icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "logo.png"))
         self.current_icon_path = self.default_icon_path
         self.language = LANGUAGES_DEFAULT
+        self.previous_icon_paths = set()
 
-        Notify.init(LANGUAGES[self.language]["app_name"])
+        Notify.init(LANGUAGES.get(self.language, {}).get("app_name", "Code Generator"))
         os.makedirs(CONFIG_DIR, exist_ok=True)
         self.load_config()
 
@@ -48,28 +61,49 @@ class TrayApp:
 
         GLib.timeout_add_seconds(1, self.tick)
 
+    def cleanup(self):
+        """Очистка временных файлов"""
+        temp_dir = get_temp_dir()
+        if not os.path.exists(temp_dir):
+            return
+
+        current_files = set(os.listdir(temp_dir))
+        for filename in current_files:
+            full_path = os.path.join(temp_dir, filename)
+            if (full_path != self.current_icon_path and
+                    filename.startswith('code_gen_') and
+                    filename.endswith('.png')):
+                try:
+                    os.unlink(full_path)
+                except Exception as e:
+                    print(f"Error removing old icon {filename}: {e}")
+
     def tr(self, key):
-        return LANGUAGES[self.language].get(key, key)
+        return LANGUAGES.get(self.language, {}).get(key, key) or key
 
     def load_config(self):
         try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                self.last_secret = data.get("secret", "")
-                self.notifications_enabled = data.get("notifications_enabled", True)
-                self.code_visible = data.get("code_visible", True)
-                self.language = data.get("language", "en")
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
+            if os.path.exists(CONFIG_PATH):
+                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.last_secret = data.get("secret", "")
+                    self.notifications_enabled = data.get("notifications_enabled", True)
+                    self.code_visible = data.get("code_visible", True)
+                    self.language = data.get("language", LANGUAGES_DEFAULT)
+        except (FileNotFoundError, json.JSONDecodeError, PermissionError) as e:
+            print(f"Error loading config: {e}")
 
     def save_config(self):
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump({
-                "secret": self.last_secret,
-                "notifications_enabled": self.notifications_enabled,
-                "code_visible": self.code_visible,
-                "language": self.language
-            }, f, ensure_ascii=False, indent=2)
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump({
+                    "secret": self.last_secret,
+                    "notifications_enabled": self.notifications_enabled,
+                    "code_visible": self.code_visible,
+                    "language": self.language
+                }, f, ensure_ascii=False, indent=2)
+        except (IOError, PermissionError) as e:
+            print(f"Error saving config: {e}")
 
     def create_menu(self):
         menu = Gtk.Menu()
@@ -99,19 +133,19 @@ class TrayApp:
         lang_item = Gtk.MenuItem(label=self.tr("language"))
         lang_item.set_submenu(lang_menu)
 
-        en_item = Gtk.RadioMenuItem.new_with_label(None, "English")
-        ru_item = Gtk.RadioMenuItem.new_with_label_from_widget(en_item, "Русский")
-        de_item = Gtk.RadioMenuItem.new_with_label_from_widget(en_item, "Deutsch")
-        zh_item = Gtk.RadioMenuItem.new_with_label_from_widget(en_item, "中文")
+        en_item = Gtk.RadioMenuItem(label="English")
+        ru_item = Gtk.RadioMenuItem(label="Русский", group=en_item)
+        de_item = Gtk.RadioMenuItem(label="Deutsch", group=en_item)
+        zh_item = Gtk.RadioMenuItem(label="中文", group=en_item)
 
         lang_items = {
-            "en": en_item,
             "ru": ru_item,
+            "en": en_item,
             "de": de_item,
             "zh": zh_item
         }
 
-        lang_items[self.language].set_active(True)
+        lang_items.get(self.language, en_item).set_active(True)
 
         for code, item in lang_items.items():
             item.connect("activate", self.on_language_change, code)
@@ -121,26 +155,33 @@ class TrayApp:
         menu.append(Gtk.SeparatorMenuItem())
 
         quit_item = Gtk.MenuItem(label=self.tr("quit"))
-        quit_item.connect("activate", Gtk.main_quit)
+        quit_item.connect("activate", self.on_quit)
         menu.append(quit_item)
 
         menu.show_all()
         self.ind.set_menu(menu)
 
+    def on_quit(self, _):
+        """Обработчик выхода из приложения"""
+        self.cleanup()
+        Gtk.main_quit()
+
     def _code_label(self):
         return self.tr("code_label").format(code=self.last_code, time_left=self.time_left)
 
     def on_toggle_notifications(self, widget):
-        self.notifications_enabled = widget.get_active()
-        self.save_config()
+        if widget:
+            self.notifications_enabled = widget.get_active()
+            self.save_config()
 
     def on_toggle_code_visibility(self, widget):
-        self.code_visible = widget.get_active()
-        self.update_code(force=True)
-        self.save_config()
+        if widget:
+            self.code_visible = widget.get_active()
+            self.update_code(force=True)
+            self.save_config()
 
     def on_language_change(self, widget, language_code):
-        if widget.get_active() and self.language != language_code:
+        if widget and language_code and self.language != language_code:
             self.language = language_code
             self.save_config()
             self.create_menu()
@@ -154,12 +195,11 @@ class TrayApp:
         dialog.add_button(Gtk.STOCK_OK, Gtk.ResponseType.OK)
         entry = Gtk.Entry()
         entry.set_text(self.last_secret)
-        # dialog.get_content_area().add(entry)
-        dialog.get_content_area().pack_start(entry, True, True, 0)
-
+        dialog.get_content_area().add(entry)
         dialog.show_all()
 
-        if dialog.run() == Gtk.ResponseType.OK:
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
             secret = entry.get_text().strip()
             if secret and secret != self.last_secret:
                 self.last_secret = secret
@@ -189,10 +229,13 @@ class TrayApp:
 
         self.update_icon()
 
-        if (changed or force) and self.notifications_enabled:
+        if (changed and not force or force) and self.notifications_enabled:
             self.show_notification(code)
 
     def generate_code(self, secret, digits=SIZE_KODE):
+        if not secret:
+            return "0" * digits
+
         now = datetime.now(TZ)
         slot = int(now.astimezone(timezone.utc).timestamp()) // INTERVAL
         msg = f"{secret}:{APPEND}:{slot}".encode()
@@ -200,54 +243,78 @@ class TrayApp:
         return f"{int.from_bytes(hm[:4], 'big') % (10 ** digits):0{digits}d}"
 
     def show_notification(self, code):
-        if not self.notifications_enabled:
+        if not self.notifications_enabled or not code:
             return
-        title = self.tr("code_updated").format(code=code)
-        notification = Notify.Notification.new(title, icon=self.default_icon_path)
-        notification.show()
+        try:
+            title = self.tr("code_updated").format(code=code)
+            notification = Notify.Notification.new(title, icon=self.default_icon_path)
+            notification.show()
+        except Exception as e:
+            print(f"Error showing notification: {e}")
 
     def update_icon(self):
-        temp_dir = os.path.expanduser("~/.cache/code_generator")
-        os.makedirs(temp_dir, exist_ok=True)
-        with tempfile.NamedTemporaryFile(prefix='code_gen_', suffix='.png', dir=temp_dir, delete=False) as tmp_file:
-            icon_path = tmp_file.name
-
-        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 64, 64)
-        context = cairo.Context(surface)
-        context.set_source_rgba(0, 0, 0, 0)
-        context.paint()
-        context.arc(32, 32, 28, 0, 2 * 3.14159)
-        context.set_source_rgba(0.7, 0.7, 0.7, 0.3)
-        context.fill()
-        progress = 1 - (self.time_left / INTERVAL)
-        context.arc(32, 32, 28, -0.5 * 3.14159, (progress * 2 * 3.14159) - 0.5 * 3.14159)
-        context.line_to(32, 32)
-        context.set_source_rgba(0.0, 0.6, 0.0, 0.7)
-        context.fill()
-        context.arc(32, 32, 28, 0, 2 * 3.14159)
-        context.set_line_width(2)
-        context.set_source_rgba(0.4, 0.4, 0.4, 0.7)
-        context.stroke()
         try:
-            app_icon_surface = cairo.ImageSurface.create_from_png(self.default_icon_path)
-            context.set_source_surface(app_icon_surface, 16, 16)
-            context.paint()
-        except:
-            pass
+            temp_dir = get_temp_dir()
+            os.makedirs(temp_dir, exist_ok=True)
 
-        surface.write_to_png(icon_path)
-        self.ind.set_icon_full(icon_path, self.tr("app_name"))
-        if hasattr(self, 'current_icon_path') and self.current_icon_path != self.default_icon_path:
-            try:
-                os.unlink(self.current_icon_path)
-            except:
-                pass
-        self.current_icon_path = icon_path
+            with tempfile.NamedTemporaryFile(
+                    prefix='code_gen_',
+                    suffix='.png',
+                    dir=temp_dir,
+                    delete=False
+            ) as tmp_file:
+                icon_path = tmp_file.name
+
+            surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 64, 64)
+            context = cairo.Context(surface)
+            context.set_source_rgba(0, 0, 0, 0)
+            context.paint()
+            context.arc(32, 32, 28, 0, 2 * 3.14159)
+            context.set_source_rgba(0.7, 0.7, 0.7, 0.3)
+            context.fill()
+            progress = 1 - (self.time_left / INTERVAL)
+            context.arc(32, 32, 28, -0.5 * 3.14159, (progress * 2 * 3.14159) - 0.5 * 3.14159)
+            context.line_to(32, 32)
+            context.set_source_rgba(0.0, 0.6, 0.0, 0.7)
+            context.fill()
+            context.arc(32, 32, 28, 0, 2 * 3.14159)
+            context.set_line_width(2)
+            context.set_source_rgba(0.4, 0.4, 0.4, 0.7)
+            context.stroke()
+
+            if os.path.exists(self.default_icon_path):
+                try:
+                    app_icon_surface = cairo.ImageSurface.create_from_png(self.default_icon_path)
+                    context.set_source_surface(app_icon_surface, 16, 16)
+                    context.paint()
+                except Exception as e:
+                    print(f"Error loading app icon: {e}")
+
+            surface.write_to_png(icon_path)
+            self.ind.set_icon_full(icon_path, self.tr("app_name"))
+
+            if hasattr(self, 'current_icon_path') and self.current_icon_path != icon_path:
+                if (self.current_icon_path != self.default_icon_path and
+                        os.path.exists(self.current_icon_path)):
+                    try:
+                        os.unlink(self.current_icon_path)
+                    except Exception as e:
+                        print(f"Error removing old icon: {e}")
+                self.current_icon_path = icon_path
+
+            surface.finish()
+        except Exception as e:
+            print(f"Error updating icon: {e}")
+            self.ind.set_icon_full(self.default_icon_path, self.tr("app_name"))
 
 
 def main():
-    TrayApp()
-    Gtk.main()
+    try:
+        app = TrayApp()
+        Gtk.main()
+    except Exception as e:
+        print(f"Application error: {e}")
+        raise
 
 
 if __name__ == "__main__":
